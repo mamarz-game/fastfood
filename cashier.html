@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>بررسی کد جایزه</title>
+<style>
+  body { margin: 0; padding: 20px; background: #1B1918; color: #FFF0DA; font-family: Tahoma, Arial, sans-serif; }
+  main { max-width: 420px; margin: 0 auto; }
+  h1 { font-size: 1.3rem; text-align: center; }
+  input, button { width: 100%; box-sizing: border-box; padding: 14px; margin-top: 10px; border-radius: 12px; border: 1px solid #c7a78862; font-size: 1.2rem; }
+  input { background: #2a2523; color: #FFF0DA; text-align: center; letter-spacing: .1em; }
+  button { background: #EE9852; color: #1B1918; font-weight: bold; cursor: pointer; }
+  #result { margin-top: 16px; padding: 14px; border-radius: 12px; line-height: 1.8; text-align: center; }
+  .ok { background: #2c4a2c; } .bad { background: #5a2218; } .warn { background: #5a4a18; }
+  small { display: block; margin-top: 18px; color: #d3c5b7; text-align: center; }
+</style>
+</head>
+<body>
+<main>
+  <h1>بررسی کد جایزه</h1>
+  <input id="code" inputmode="numeric" dir="ltr" placeholder="مثلاً 1-4827-361" autocomplete="off">
+  <button id="check">بررسی</button>
+  <div id="result" hidden></div>
+  <small id="count"></small>
+</main>
+<script>
+'use strict';
+// Must be IDENTICAL to voucherSecret in index.html.
+const voucherSecret = 'mamaraz-fastfood-m1367-2026';
+const usedKey = 'mamaraz.cashier.used.v1';
+const prizes = { '1': 'یک نوشابهٔ رایگان', '2': 'نوشابه + سس تک‌نفره' };
+const $ = id => document.getElementById(id);
+
+function todaySeed() {
+  // The game day ends at 2:00 AM (must match index.html).
+  const dayStartHour = 2;
+  const d = new Date(Date.now() - dayStartHour * 3600000);
+  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+}
+function voucherCheck(day, type, digits) {
+  let h = 2166136261;
+  const text = voucherSecret + '|' + day + '|' + type + '|' + digits;
+  for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  return String(h % 1000).padStart(3, '0');
+}
+function loadUsed() { try { return JSON.parse(localStorage.getItem(usedKey)) || {}; } catch { return {}; } }
+function saveUsed(u) { try { localStorage.setItem(usedKey, JSON.stringify(u)); } catch {} }
+function show(cls, html) { const r = $('result'); r.hidden = false; r.className = cls; r.innerHTML = html; }
+function updateCount() {
+  const n = Object.values(loadUsed()).filter(v => v.day === todaySeed()).length;
+  $('count').textContent = 'جایزه‌های تحویل‌شده امروز: ' + n.toLocaleString('fa-IR');
+}
+
+$('check').addEventListener('click', () => {
+  // Accept Persian/Arabic digits and any separators.
+  const raw = $('code').value.replace(/[۰-۹]/g, c => c.charCodeAt(0) - 1776).replace(/[٠-٩]/g, c => c.charCodeAt(0) - 1632);
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length !== 8) return show('bad', 'کد باید ۸ رقم باشد.');
+  const type = digits[0], body = digits.slice(1, 5), check = digits.slice(5);
+  if (!prizes[type] || voucherCheck(todaySeed(), type, body) !== check) {
+    return show('bad', '❌ کد نامعتبر است (جعلی، اشتباه یا مال روز دیگر).');
+  }
+  const code = type + '-' + body + '-' + check;
+  const used = loadUsed();
+  if (used[code]) {
+    return show('warn', '⚠️ این کد قبلاً استفاده شده است.<br>ساعت ' + new Date(used[code].time).toLocaleTimeString('fa-IR'));
+  }
+  show('ok', '✅ کد معتبر است<br><b>' + prizes[type] + '</b><br><button id="redeem">تحویل داده شد</button>');
+  $('redeem').addEventListener('click', () => {
+    const u = loadUsed();
+    u[code] = { time: Date.now(), day: todaySeed() };
+    saveUsed(u);
+    $('code').value = '';
+    show('ok', 'ثبت شد ✔');
+    updateCount();
+  });
+});
+updateCount();
+</script>
+</body>
+</html>
